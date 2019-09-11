@@ -90,6 +90,14 @@ func FieldName(name string) Option {
 	}
 }
 
+// FormValueName allows you to change the name attribute of the param form value
+// The default is 'gorilla.csrf.Token'.
+func FormValueName(name string) Option {
+	return func(cs *csrf) {
+		cs.opts.FormValueName = name
+	}
+}
+
 // CookieName changes the name of the CSRF cookie issued to clients.
 //
 // Note that cookie names should not contain whitespace, commas, semicolons,
@@ -144,4 +152,12 @@ func parseOptions(h http.Handler, opts ...Option) *csrf {
 	}
 
 	return cs
+}
+
+// UnsafePaths configures a set of request paths that are considered as
+// un-trusted despite their methods.
+func UnsafePaths(paths []string) Option {
+	return func(cs *csrf) {
+		cs.opts.UnsafePaths = paths
+	}
 }

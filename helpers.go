@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // Token returns a masked CSRF token ready for passing into HTML template or
@@ -111,10 +112,25 @@ func (cs *csrf) requestToken(r *http.Request) []byte {
 
 	// 2. Fall back to the POST (form) value.
 	if issued == "" {
-		issued = r.PostFormValue(cs.opts.FieldName)
+		issued = r.FormValue(cs.opts.FieldName)
 	}
 
-	// 3. Finally, fall back to the multipart form (if set).
+	// 3. Fall back to the all form values
+	if issued == "" {
+		// issued = r.FormValue(cs.opts.FormValueName)
+		bytes, err := base64.URLEncoding.DecodeString(r.FormValue(cs.opts.FormValueName))
+		if err != nil {
+			return nil
+		}
+		s := strings.SplitN(string(bytes), ":", 2)
+		if len(s) != 2 {
+			return nil
+		}
+		// state contains the csrf nonce and redirect uri
+		issued = s[0]
+	}
+
+	// 4. Finally, fall back to the multipart form (if set).
 	if issued == "" && r.MultipartForm != nil {
 		vals := r.MultipartForm.Value[cs.opts.FieldName]
 

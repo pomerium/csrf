@@ -70,9 +70,11 @@ type options struct {
 	Secure         bool
 	RequestHeader  string
 	FieldName      string
+	FormValueName  string
 	ErrorHandler   http.Handler
 	CookieName     string
 	TrustedOrigins []string
+	UnsafePaths    []string
 }
 
 // Protect is HTTP middleware that provides Cross-Site Request Forgery
@@ -140,6 +142,10 @@ func Protect(authKey []byte, opts ...Option) func(http.Handler) http.Handler {
 
 		if cs.opts.FieldName == "" {
 			cs.opts.FieldName = fieldName
+		}
+
+		if cs.opts.FormValueName == "" {
+			cs.opts.FormValueName = fieldName
 		}
 
 		if cs.opts.CookieName == "" {
@@ -220,7 +226,8 @@ func (cs *csrf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// HTTP methods not defined as idempotent ("safe") under RFC7231 require
 	// inspection.
-	if !contains(safeMethods, r.Method) {
+	if !contains(safeMethods, r.Method) ||
+		contains(cs.opts.UnsafePaths, r.URL.Path) {
 		// Enforce an origin check for HTTPS connections. As per the Django CSRF
 		// implementation (https://goo.gl/vKA7GE) the Referer header is almost
 		// always present for same-domain HTTP requests.
