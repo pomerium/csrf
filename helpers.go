@@ -122,7 +122,7 @@ func (cs *csrf) requestToken(r *http.Request) []byte {
 		if err != nil {
 			return nil
 		}
-		s := strings.SplitN(string(bytes), ":", 2)
+		s := strings.SplitN(string(bytes), "|", 2)
 		if len(s) != 2 {
 			return nil
 		}
