@@ -1,4 +1,5 @@
-// +build go1.11
+// +build !go1.11
+// file for compatibility with go versions prior to 1.11
 
 package csrf
 
@@ -130,8 +131,8 @@ func TestMaxAgeZero(t *testing.T) {
 	}
 }
 
-// TestSameSizeSet tests that setting SameSite Option sets the SameSite
-// attribute on the cookie in post go1.11 systems.
+// TestSameSizeSet tests that setting SameSite Option does not set the SameSite
+// attribute on the cookie in legacy systems.
 func TestSameSizeSet(t *testing.T) {
 	s := http.NewServeMux()
 	s.HandleFunc("/", testHandler)
@@ -155,38 +156,7 @@ func TestSameSizeSet(t *testing.T) {
 	}
 
 	cookie := rr.Header().Get("Set-Cookie")
-	if !strings.Contains(cookie, "SameSite") {
-		t.Fatalf("cookie incorrectly does not have the SameSite attribute set: got %q", cookie)
-	}
-}
-
-// TestSameSiteDefault tests that the default set of options
-// set SameSite=Lax on the CSRF cookie.
-func TestSameSiteDefaultLaxMode(t *testing.T) {
-	s := http.NewServeMux()
-	s.HandleFunc("/", testHandler)
-
-	r, err := http.NewRequest("GET", "/", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rr := httptest.NewRecorder()
-	p := Protect(testKey)(s)
-	p.ServeHTTP(rr, r)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("middleware failed to pass to the next handler: got %v want %v",
-			rr.Code, http.StatusOK)
-	}
-
-	cookie := rr.Header().Get("Set-Cookie")
-	if cookie == "" {
-		t.Fatalf("cookie not get Set-Cookie header: got headers %v", rr.Header())
-	}
-
-	sameSiteLax := "SameSite=Lax"
-	if !strings.Contains(cookie, sameSiteLax) {
-		t.Fatalf("cookie should contain %q by default: got %s", sameSiteLax, cookie)
+	if strings.Contains(cookie, "SameSite") {
+		t.Fatalf("cookie incorrectly has the SameSite attribute set: got %q", cookie)
 	}
 }

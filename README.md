@@ -29,6 +29,18 @@ gorilla/csrf is designed to work with any Go web framework, including:
 gorilla/csrf is also compatible with middleware 'helper' libraries like
 [Alice](https://github.com/justinas/alice) and [Negroni](https://github.com/codegangsta/negroni).
 
+## Contents
+
+  * [Install](#install)
+  * [Examples](#examples)
+    + [HTML Forms](#html-forms)
+    + [JavaScript Applications](#javascript-applications)
+    + [Google App Engine](#google-app-engine)
+    + [Setting SameSite](#setting-samesite)
+    + [Setting Options](#setting-options)
+  * [Design Notes](#design-notes)
+  * [License](#license)
+
 ## Install
 
 With a properly configured Go toolchain:
@@ -42,6 +54,7 @@ go get github.com/gorilla/csrf
 - [HTML Forms](#html-forms)
 - [JavaScript Apps](#javascript-applications)
 - [Google App Engine](#google-app-engine)
+- [Setting SameSite](#setting-samesite)
 - [Setting Options](#setting-options)
 
 gorilla/csrf is easy to use: add the middleware to your router with
@@ -213,7 +226,7 @@ import (
 
 func main() {
     r := mux.NewRouter()
-    csrfMiddleware := csrf.Protect([]byte("32-byte-long-auth-key"), csrf.TrustedOrigin([]string{"ui.domain.com"}))
+    csrfMiddleware := csrf.Protect([]byte("32-byte-long-auth-key"), csrf.TrustedOrigins([]string{"ui.domain.com"}))
 
     api := r.PathPrefix("/api").Subrouter()
     api.Use(csrfMiddleware)
@@ -267,6 +280,30 @@ Note: You can ignore this if you're using the
 [second-generation](https://cloud.google.com/appengine/docs/go/) Go runtime
 on App Engine (Go 1.11 and above).
 
+### Setting SameSite
+
+Go 1.11 introduced the option to set the SameSite attribute in cookies. This is
+valuable if a developer wants to instruct a browser to not include cookies during
+a cross site request. SameSiteStrictMode prevents all cross site requests from including
+the cookie. SameSiteLaxMode prevents CSRF prone requests (POST) from including the cookie
+but allows the cookie to be included in GET requests to support external linking.
+
+```go
+func main() {
+    CSRF := csrf.Protect(
+      []byte("a-32-byte-long-key-goes-here"),
+      // instruct the browser to never send cookies during cross site requests
+      csrf.SameSite(csrf.SameSiteStrictMode),
+    )
+
+    r := mux.NewRouter()
+    r.HandleFunc("/signup", GetSignupForm)
+    r.HandleFunc("/signup/post", PostSignupForm)
+
+    http.ListenAndServe(":8000", CSRF(r))
+}
+```
+
 ### Setting Options
 
 What about providing your own error handler and changing the HTTP header the
@@ -314,6 +351,9 @@ Getting CSRF protection right is important, so here's some background:
 - Cookies are authenticated and based on the [securecookie](https://github.com/gorilla/securecookie)
   library. They're also Secure (issued over HTTPS only) and are HttpOnly
   by default, because sane defaults are important.
+- Cookie SameSite attribute (prevents cookies from being sent by a browser
+  during cross site requests) are not set by default to maintain backwards compatibility
+  for legacy systems. The SameSite attribute can be set with the SameSite option.
 - Go's `crypto/rand` library is used to generate the 32 byte (256 bit) tokens
   and the one-time-pad used for masking them.
 
