@@ -1,15 +1,15 @@
+//go:build go1.11
 // +build go1.11
 
 package csrf
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/pkg/errors"
 
 	"github.com/gorilla/securecookie"
 )
@@ -19,7 +19,7 @@ var _ store = &cookieStore{}
 
 // brokenSaveStore is a CSRF store that cannot, well, save.
 type brokenSaveStore struct {
-	store
+	store // nolint:unused
 }
 
 func (bs *brokenSaveStore) Get(*http.Request) ([]byte, error) {

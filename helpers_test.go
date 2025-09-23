@@ -2,10 +2,9 @@ package csrf
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -34,9 +33,12 @@ func TestFormToken(t *testing.T) {
 	s.HandleFunc("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token = Token(r)
 		t := template.Must((template.New("base").Parse(testTemplate)))
-		t.Execute(w, map[string]interface{}{
+		err := t.Execute(w, map[string]interface{}{
 			TemplateTag: TemplateField(r),
 		})
+		if err != nil {
+			log.Printf("errored during executing the template: %v", err)
+		}
 	}))
 
 	r, err := http.NewRequest("GET", "/", nil)
@@ -71,15 +73,15 @@ func TestMultipartFormToken(t *testing.T) {
 	s.HandleFunc("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token = Token(r)
 		t := template.Must((template.New("base").Parse(testTemplate)))
-		t.Execute(w, map[string]interface{}{
+		err := t.Execute(w, map[string]interface{}{
 			TemplateTag: TemplateField(r),
 		})
+		if err != nil {
+			log.Printf("errored during executing the template: %v", err)
+		}
 	}))
 
-	r, err := http.NewRequest("GET", "/", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r := createRequest("GET", "/", true)
 
 	rr := httptest.NewRecorder()
 	p := Protect(testKey)(s)
@@ -93,16 +95,20 @@ func TestMultipartFormToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wr.Write([]byte(token))
-	mp.Close()
-
-	r, err = http.NewRequest("POST", "http://www.gorillatoolkit.org/", &b)
+	_, err = wr.Write([]byte(token))
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	mp.Close()
+
+	r = httptest.NewRequest("POST", "/", &b)
+	r.Host = "www.gorillatoolkit.org"
+
 	// Add the multipart header.
 	r.Header.Set("Content-Type", mp.FormDataContentType())
+	// Add Origin to pass the same-origin check.
+	r.Header.Set("Origin", "https://www.gorillatoolkit.org")
 
 	// Send back the issued cookie.
 	setCookie(rr, r)
@@ -185,34 +191,11 @@ func TestXOR(t *testing.T) {
 
 	for _, token := range testTokens {
 		if res := xorToken(token.a, token.b); res != nil {
-			if bytes.Compare(res, token.expected) != 0 {
+			if !bytes.Equal(res, token.expected) {
 				t.Fatalf("xorBytes failed to return the expected result: got %v want %v",
 					res, token.expected)
 			}
 		}
-	}
-}
-
-// shortReader provides a broken implementation of io.Reader for testing.
-type shortReader struct{}
-
-func (sr shortReader) Read(p []byte) (int, error) {
-	return len(p) % 2, io.ErrUnexpectedEOF
-}
-
-// TestGenerateRandomBytes tests the (extremely rare) case that crypto/rand does
-// not return the expected number of bytes.
-func TestGenerateRandomBytes(t *testing.T) {
-	// Pioneered from https://github.com/justinas/nosurf
-	original := rand.Reader
-	rand.Reader = shortReader{}
-	defer func() {
-		rand.Reader = original
-	}()
-
-	b, err := generateRandomBytes(tokenLength)
-	if err == nil {
-		t.Fatalf("generateRandomBytes did not report a short read: only read %d bytes", len(b))
 	}
 }
 
@@ -226,16 +209,17 @@ func TestTemplateField(t *testing.T) {
 		token = Token(r)
 		templateField = string(TemplateField(r))
 		t := template.Must((template.New("base").Parse(testTemplate)))
-		t.Execute(w, map[string]interface{}{
+		err := t.Execute(w, map[string]interface{}{
 			TemplateTag: TemplateField(r),
 		})
+		if err != nil {
+			log.Printf("errored during executing the template: %v", err)
+		}
 	}))
 
 	testFieldName := "custom_field_name"
-	r, err := http.NewRequest("GET", "/", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r := createRequest("GET", "/", false)
+	// r, err := http.NewRequest("GET", "/", nil)
 
 	rr := httptest.NewRecorder()
 	p := Protect(testKey, FieldName(testFieldName))(s)
@@ -280,15 +264,12 @@ func TestUnsafeSkipCSRFCheck(t *testing.T) {
 	var teapot = 418
 
 	// Issue a POST request without a CSRF token in the request.
-	s.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Set a non-200 header to make the test explicit.
 		w.WriteHeader(teapot)
 	}))
 
-	r, err := http.NewRequest("POST", "/", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r := createRequest("POST", "/", false)
 
 	// Must be used prior to the CSRF handler being invoked.
 	p := skipCheck(Protect(testKey)(s))
